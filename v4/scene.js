@@ -24,12 +24,12 @@ export function buildScene(renderer, manager) {
 
   // ---------------------------------------------------------------- materials
   const M = {
-    cream: new THREE.MeshStandardMaterial({ map: T.cream, bumpMap: T.cream, bumpScale: 0.6, roughness: 0.22, metalness: 0, envMapIntensity: 0.9 }),
+    cream: new THREE.MeshStandardMaterial({ map: T.cream, roughness: 0.22, metalness: 0, envMapIntensity: 0.9 }),
     creamMatte: new THREE.MeshStandardMaterial({ color: 0xded4c4, roughness: 0.85, metalness: 0 }),
     ceilingMaroon: new THREE.MeshStandardMaterial({ color: 0x4f141b, roughness: 0.8, metalness: 0 }),
     maroon: new THREE.MeshPhysicalMaterial({ color: 0x4f141b, roughness: 0.8, sheen: 0.6, sheenColor: 0xd89a9a, sheenRoughness: 0.5, metalness: 0, envMapIntensity: 0.7 }),
     dark: new THREE.MeshStandardMaterial({ map: T.dark, roughness: 0.32, metalness: 0, envMapIntensity: 1.2 }),
-    gold: new THREE.MeshStandardMaterial({ color: 0xd4b27a, roughness: 0.2, metalness: 1, envMapIntensity: 1.3 }),
+    gold: new THREE.MeshStandardMaterial({ color: 0xdcc497, roughness: 0.3, metalness: 1, envMapIntensity: 1.0 }),
     brass: new THREE.MeshStandardMaterial({ color: 0xd8c29c, roughness: 0.26, metalness: 1, side: THREE.DoubleSide }),
     bronzeDark: new THREE.MeshStandardMaterial({ color: 0x3b2618, roughness: 0.45, metalness: 0.4 }),
     wood: new THREE.MeshStandardMaterial({ map: T.door, roughness: 0.45, metalness: 0, envMapIntensity: 0.8 }),
@@ -40,9 +40,9 @@ export function buildScene(renderer, manager) {
     sculpt: new THREE.MeshStandardMaterial({ map: T.sculpt, bumpMap: T.sculpt, bumpScale: 4, roughness: 0.35, metalness: 0.25, emissive: 0xffffff, emissiveMap: T.sculpt, emissiveIntensity: 0.12 }),
     leaf: new THREE.MeshStandardMaterial({ color: 0x2f5a2a, roughness: 0.6, side: THREE.DoubleSide }),
     soil: new THREE.MeshStandardMaterial({ color: 0x2a1c12, roughness: 1 }),
-    emissiveWarm: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.66, 0.34).multiplyScalar(2.4) }),
-    emissiveCove: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.64, 0.32).multiplyScalar(2.0) }),
-    emissiveDown: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.72, 0.42).multiplyScalar(3.0) }),
+    emissiveWarm: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.86, 0.7).multiplyScalar(2.6) }),
+    emissiveCove: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.88, 0.74).multiplyScalar(2.2) }),
+    emissiveDown: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.93, 0.84).multiplyScalar(4.0) }),
     floor: new THREE.MeshStandardMaterial({ map: T.floor, roughness: 0.18, metalness: 0, transparent: true, opacity: 0.9, envMapIntensity: 0.35 }),
   };
   for (const [k, m] of Object.entries(M)) m.name = k;
@@ -97,12 +97,12 @@ export function buildScene(renderer, manager) {
     box(F, M.gold, (u0 + u1) / 2, v1 + 0.02, w0 + 0.035, u1 - u0 + 0.03, 0.04, 0.07);
     box(F, M.gold, (u0 + u1) / 2, v0 + 0.06, w0 + 0.035, u1 - u0 + 0.03, 0.12, 0.07); // brass kick
   }
-  // crown: cream top band with a gold hairline (v5; was maroon/gold) seen in every elevation (9.6 m -> ceiling)
+  // crown: the maroon/gold top band seen in every elevation (9.6 m -> ceiling)
   function crown(F, len) {
     box(F, M.creamMatte, 0, 9.47, 0.05, len, 0.26, 0.1);
     box(F, M.gold, 0, 9.62, 0.1, len, 0.04, 0.08);
-    box(F, M.creamMatte, 0, 9.95, 0.07, len, 0.62, 0.06);   // v5: maroon ceiling band removed -> cream with one gold hairline
-    box(F, M.gold, 0, 9.66, 0.11, len, 0.012, 0.02);
+    box(F, M.maroon, 0, 9.95, 0.07, len, 0.62, 0.06);
+    box(F, M.gold, 0, 9.66, 0.11, len, 0.025, 0.04); box(F, M.gold, 0, 10.24, 0.11, len, 0.025, 0.04);
     box(F, M.creamMatte, 0, 10.3, 0.12, len, 0.1, 0.24);
   }
   const skirting = (F, u0, u1) => box(F, M.gold, (u0 + u1) / 2, 0.06, 0.03, u1 - u0, 0.12, 0.05);
@@ -396,7 +396,7 @@ export function buildScene(renderer, manager) {
     const armG = new THREE.BoxGeometry(0.03, 0.05, 1);
     const shade = new THREE.InstancedMesh(shadeG, M.frame, n), inner = new THREE.InstancedMesh(innerG, M.emissiveWarm, n);
     const cap = new THREE.InstancedMesh(capG, M.emissiveWarm, n), plate = new THREE.InstancedMesh(plateG, M.frame, n), arm = new THREE.InstancedMesh(armG, M.frame, n);
-    const washMat = new THREE.MeshBasicMaterial({ map: washTex, color: new THREE.Color(1, 0.68, 0.38).multiplyScalar(0.34), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const washMat = new THREE.MeshBasicMaterial({ map: washTex, color: new THREE.Color(1, 0.86, 0.7).multiplyScalar(0.3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     washMat.name = 'fake_wash';
     const wash = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.1, 2.6), washMat, n);
     const mm = new THREE.Matrix4(), s3 = new THREE.Vector3(), q = new THREE.Quaternion(), p = new THREE.Vector3();

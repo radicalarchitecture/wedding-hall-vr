@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
-import { RGBELoader } from './vendor/addons/RGBELoader.js';
-import { buildScene, L, W, H, HL, HW } from './scene.js?v=5';
-import { CardboardRenderer, PHONES, MI_VR_PLAY } from './cardboard.js?v=5';
+import { RoomEnvironment } from '../vendor/addons/RoomEnvironment.js';
+import { RGBELoader } from '../vendor/addons/RGBELoader.js';
+import { buildScene, L, W, H, HL, HW } from './scene.js?v=4';
+import { CardboardRenderer, PHONES, MI_VR_PLAY } from './cardboard.js?v=4';
 
 let EYE = parseFloat(params0().get('eye')) || 1.56; // 5'6" (1.68 m) adult: standing eye level 1.56 m AFF
 function params0() { return new URLSearchParams(location.search); }
@@ -19,7 +19,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, DPR_CAP));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.AgXToneMapping;
-renderer.toneMappingExposure = 0.7;
+renderer.toneMappingExposure = 0.78;
 $('#stage').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -92,7 +92,7 @@ function makeLabel(text) {
 }
 function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
-// 3D gaze reticle (rendered in both eyes at 2 m); ring highlights when over a hotspot (no dwell timer)
+// 3D gaze reticle (rendered in both eyes at 2 m) with dwell arc
 const reticle = new THREE.Group();
 const retMat = new THREE.ShaderMaterial({ uniforms: { p: { value: 0 }, on: { value: 0 } }, transparent: true, depthTest: false, depthWrite: false, toneMapped: false,
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
@@ -272,7 +272,7 @@ async function enterVR(opts = {}) {
   if (!opts.noHistory) history.pushState({ vr: 1 }, '');
   onResize();
   if (!locked && isPortrait() && !opts.noRotatePrompt) $('#rotate').classList.add('show');
-  setTimeout(() => showVRToast('Look at a ring and tap the headset button to move'), 700);
+  setTimeout(() => showVRToast('Look at a ring and press the button to move'), 700);
   vrFrames = 0; vrT0 = performance.now(); vrQualityStep = 0;
   if (photoreal) prShow(current, true);
 }
@@ -339,10 +339,10 @@ function prTex(url) {
   if (texCache.size > 3) { const [k, old] = texCache.entries().next().value; if (k !== url) { texCache.delete(k); old.then(t => { liveTex.delete(t); if (!prSets.some(s => s.userData.L.material.map === t || s.userData.M.material.map === t)) t.dispose(); }); } }
   return p;
 }
-const PR_VER = '?v=5';
+const PR_VER = '?v=4';
 // panorama quality: 'light' = 4096x2048 per eye (OnePlus Nord / default), 'hq' = 6144x3072 per eye (S25 Ultra)
 let prQuality = params.get('q') || localStorage.getItem('whq') || (cardboard.phoneKey === 's25u' ? 'hq' : 'light');
-const PR_DIR = 'pano/v4/';
+const PR_DIR = '../pano/v4/';
 const prUrl = (v, eye) => `${PR_DIR}${prQuality === 'hq' ? 'e6' : 'e4'}_${VIEWS.indexOf(v)}_${eye}.jpg${PR_VER}`;
 async function prShow(v, instant = false) {
   prBusy = true; const stereo = vrOn; let tL, tR = null;
@@ -451,14 +451,15 @@ function updateHotspots(now, dt) {
   let target = null;
   if (vrOn) { ray.setFromCamera(_v0, camera); const hs = ray.intersectObjects(hitMeshes, false); let h = null; for (const x of hs) if (x.object.parent.visible) { h = x; break; } target = h ? h.object : null; }
   if (target !== gazeTarget) { gazeTarget = target; gazeT = 0; }
-  // v5: no dwell/auto-teleport -- moving only on an explicit tap (headset nib or screen); hover = subtle highlight
-  retMat.uniforms.p.value = 0; if (gazeTarget) retMat.uniforms.on.value = 1; else if (retMat.uniforms.on.value === 1 && !gazeTarget) retMat.uniforms.on.value = 0;
+  if (gazeTarget) gazeT += dt;
+  const p = clamp(gazeT / 2.0, 0, 1); retMat.uniforms.p.value = p; if (gazeTarget) retMat.uniforms.on.value = 1; else if (retMat.uniforms.on.value === 1 && !gazeTarget) retMat.uniforms.on.value = 0;
+  if (vrOn && p >= 1) { const v = gazeTarget.userData.view; goTo(v); showVRToast(v.name, 1400); gazeTarget = null; gazeT = 0; }
   for (const h of hotspots) {
     const d = Math.hypot(h.position.x - head.position.x, h.position.z - head.position.z);
     h.visible = d > 0.5;
     const hot = gazeTarget && gazeTarget.parent === h;
     const pulse = 1 + Math.sin(now * 0.004 + h.position.x) * 0.06;
-    h.userData.ring.scale.setScalar(hot ? 1.15 : pulse);
+    h.userData.ring.scale.setScalar(hot ? 1.35 : pulse);
     h.userData.ring.material.opacity = hot ? 1 : 0.75;
     h.userData.disc.material.opacity = hot ? 0.28 : 0.06;
     h.userData.beam.material.uniforms.a.value = hot ? 0.9 : 0.32;
@@ -492,7 +493,7 @@ function loop(now) {
 const _cam = new THREE.Object3D();
 function camObj() { head.getWorldPosition(_cam.position); head.getWorldQuaternion(_cam.quaternion); return _cam; }
 let modelReady = false, envReady = false;
-new RGBELoader().load('pano/v4/env.hdr', t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; scene.environmentIntensity = 0.3; t.dispose(); envReady = true; finishLoad(); },
+new RGBELoader().load('../pano/v4/env.hdr', t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; scene.environmentIntensity = 0.3; t.dispose(); envReady = true; finishLoad(); },
   undefined, () => { envReady = 'fail'; finishLoad(); });
 function finishLoad() {
   if (!modelReady || !envReady || window.__ready) return;
