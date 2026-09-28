@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Radical Architecture · Lobby spectator</title>
+<link rel="stylesheet" href="spectator.css?v=1">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+</head><body>
+<canvas id="c"></canvas>
+<div id="pair">
+  <div class="brand">RADICAL ARCHITECTURE</div>
+  <h1>Lobby spectator</h1>
+  <p>Enter the 4-digit room code shown on the headset phone<br><small>(Setup → TV spectator)</small></p>
+  <form id="pairForm"><input id="code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="1234" autocomplete="off" autofocus><button>Connect</button></form>
+</div>
+<div id="status"><i></i><span>waiting…</span></div>
+<div id="rec"><i></i><span>00:00</span></div>
+<div id="msg"></div>
+<div id="bar">
+  <button id="bFull" title="Full screen (F)">⛶ Full screen</button>
+  <label>FOV <input id="fov" type="range" min="45" max="110" value="75"><output id="fovO">75°</output></label>
+  <label class="chk"><input type="checkbox" id="level" checked> Level horizon</label>
+  <label>Smoothing <select id="smooth"><option value="12">Low</option><option value="5" selected>Cinematic</option><option value="2.5">Very smooth</option></select></label>
+  <label class="chk"><input type="checkbox" id="wm" checked> Watermark</label>
+  <span class="sep"></span>
+  <label>Video <select id="res"><option value="1080" selected>1080p</option><option value="2160">4K</option></select></label>
+  <select id="aspect"><option value="land" selected>16:9 landscape (TV)</option><option value="port">9:16 portrait (Reels)</option></select>
+  <select id="fmt"></select>
+  <button id="bRec" title="Record (R)">● Record</button>
+  <button id="bCode" title="Change room code">Code <b id="codeO"></b></button>
+</div>
+<script type="module" src="spectator.js?v=1"></script>
+</body></html>

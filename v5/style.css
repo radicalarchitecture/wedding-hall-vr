@@ -68,9 +68,3 @@ body.vr #vr{display:block}
 body.vr #prSpin{display:none}
 @keyframes prs{to{transform:rotate(360deg)}}
 @media (max-width:480px){#bar{gap:1px;padding:5px 5px;max-width:calc(100vw - 8px)}.tb{width:43px;font-size:9.5px}#btnVR{padding-left:14px;padding-right:14px}}
-
-#tvLink{border:1px solid rgba(212,178,118,.35);border-radius:10px;padding:8px 10px;margin:8px 0}
-#tvLink legend{color:#d4b276;font-size:.85em;padding:0 4px}
-.tvcode{margin:6px 0}.tvcode b{font-size:1.6em;letter-spacing:.18em;color:#f3dfb3;margin:0 8px}
-.tvrow{display:flex;gap:10px;align-items:center}#tvQR{background:#fff;border-radius:6px;flex:none}
-#tvURL{word-break:break-all}

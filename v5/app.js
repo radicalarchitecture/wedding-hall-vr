@@ -1,9 +1,8 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
-import { RGBELoader } from './vendor/addons/RGBELoader.js';
+import { RoomEnvironment } from '../vendor/addons/RoomEnvironment.js';
+import { RGBELoader } from '../vendor/addons/RGBELoader.js';
 import { buildScene, L, W, H, HL, HW } from './scene.js?v=5';
 import { CardboardRenderer, PHONES, MI_VR_PLAY } from './cardboard.js?v=5';
-import { LinkSender, makeCode } from './link.js?v=6';
 
 let EYE = parseFloat(params0().get('eye')) || 1.56; // 5'6" (1.68 m) adult: standing eye level 1.56 m AFF
 function params0() { return new URLSearchParams(location.search); }
@@ -343,7 +342,7 @@ function prTex(url) {
 const PR_VER = '?v=5';
 // panorama quality: 'light' = 4096x2048 per eye (OnePlus Nord / default), 'hq' = 6144x3072 per eye (S25 Ultra)
 let prQuality = params.get('q') || localStorage.getItem('whq') || (cardboard.phoneKey === 's25u' ? 'hq' : 'light');
-const PR_DIR = 'pano/v5/';
+const PR_DIR = '../pano/v5/';
 const prUrl = (v, eye) => `${PR_DIR}${prQuality === 'hq' ? 'e6' : 'e4'}_${VIEWS.indexOf(v)}_${eye}.jpg${PR_VER}`;
 async function prShow(v, instant = false) {
   prBusy = true; const stereo = vrOn; let tL, tR = null;
@@ -493,7 +492,7 @@ function loop(now) {
 const _cam = new THREE.Object3D();
 function camObj() { head.getWorldPosition(_cam.position); head.getWorldQuaternion(_cam.quaternion); return _cam; }
 let modelReady = false, envReady = false;
-new RGBELoader().load('pano/v5/env.hdr', t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; scene.environmentIntensity = 0.3; t.dispose(); envReady = true; finishLoad(); },
+new RGBELoader().load('../pano/v5/env.hdr', t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; scene.environmentIntensity = 0.3; t.dispose(); envReady = true; finishLoad(); },
   undefined, () => { envReady = 'fail'; finishLoad(); });
 function finishLoad() {
   if (!modelReady || !envReady || window.__ready) return;
@@ -540,35 +539,7 @@ async function exportPanorama(width = 8192, quality = 0.92) {
 }
 
 applyMode();
-// ------------------------------------------------------------------ TV spectator link (throttled 20 Hz, no extra rendering)
-let tvLink = null, tvTimer = 0, tvLastStr = '', tvLastT = 0;
-const tvCode = () => { let c = localStorage.getItem('whTVcode'); if (!c) { c = makeCode(); localStorage.setItem('whTVcode', c); } return c; };
-const tvSpecURL = () => new URL('spectator.html', location.href).href.split('?')[0];
-function tvShow() {
-  const code = tvCode(); $('#tvCode').textContent = code; $('#tvURL').textContent = tvSpecURL().replace(/^https?:\/\//, '');
-  const s = document.createElement('script'); s.src = 'vendor/qrcode.js'; s.onload = () => { try { const qr = window.qrcode(0, 'M'); qr.addData(tvSpecURL() + '?room=' + code); qr.make(); $('#tvQR').src = qr.createDataURL(4, 8); } catch (e) {} };
-  if (!window.qrcode) document.head.appendChild(s); else s.onload();
-}
-function tvTick() {
-  if (!tvLink || !tvLink.viewers) return;
-  const q = head.quaternion, r = x => Math.round(x * 1e4) / 1e4;
-  let vi = VIEWS.indexOf(current);
-  if (!photoreal || vi < 0) { let bd = 1e9; VIEWS.forEach((w, i) => { const d = Math.hypot(w.x - head.position.x, w.z - head.position.z); if (d < bd) { bd = d; vi = i; } }); }
-  const str = `{"q":[${r(q.x)},${r(q.y)},${r(q.z)},${r(q.w)}],"v":${vi},"m":${photoreal ? 1 : 0},"f":${Math.round(fov)},"vr":${vrOn ? 1 : 0}}`;
-  const now = performance.now(); if (str === tvLastStr && now - tvLastT < 1000) return;
-  tvLastStr = str; tvLastT = now; tvLink.send(str);
-}
-function tvEnable(on) {
-  localStorage.setItem('whTV', on ? '1' : '0'); $('#setTV').checked = on; $('#tvBox').hidden = !on;
-  if (on && !tvLink) { tvShow(); tvLink = new LinkSender(tvCode(), 'vendor/', s => $('#tvStatus').textContent = s); tvLink.start(); tvTimer = setInterval(tvTick, 50); }
-  if (!on && tvLink) { tvLink.stop(); tvLink = null; clearInterval(tvTimer); }
-}
-$('#setTV').onchange = e => tvEnable(e.target.checked);
-$('#tvNew').onclick = () => { localStorage.setItem('whTVcode', makeCode()); if (tvLink) { tvEnable(false); tvEnable(true); } else tvShow(); };
-if (localStorage.getItem('whTV') === '1' || params.get('tv') === '1') tvEnable(true);
-
 window.app = { setMode, setFinish, get photoreal() { return photoreal; }, enterVR, exitVR, goTo, VIEWS, exportPanorama, cardboard, vrSelect,
   look: (y, p, f) => { poke(); yaw = y; pitch = p; if (f) { fov = f; camera.fov = f; } idleT = -1e9; },
-  tvEnable, get tvCode() { return tvCode(); }, get tvViewers() { return tvLink ? tvLink.viewers : 0; },
   place: (x, z) => { head.position.x = x; head.position.z = z; tween = null; },
   setReflections: v => { reflections = v; S.mirror.visible = v && !photoreal; }, camera, renderer, scene, S, prShow };
