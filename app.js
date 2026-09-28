@@ -342,7 +342,7 @@ function prTex(url) {
 const PR_VER = '?v=5';
 // panorama quality: 'light' = 4096x2048 per eye (OnePlus Nord / default), 'hq' = 6144x3072 per eye (S25 Ultra)
 let prQuality = params.get('q') || localStorage.getItem('whq') || (cardboard.phoneKey === 's25u' ? 'hq' : 'light');
-const PR_DIR = 'pano/v4/';
+const PR_DIR = 'pano/v5/';
 const prUrl = (v, eye) => `${PR_DIR}${prQuality === 'hq' ? 'e6' : 'e4'}_${VIEWS.indexOf(v)}_${eye}.jpg${PR_VER}`;
 async function prShow(v, instant = false) {
   prBusy = true; const stereo = vrOn; let tL, tR = null;
@@ -492,7 +492,7 @@ function loop(now) {
 const _cam = new THREE.Object3D();
 function camObj() { head.getWorldPosition(_cam.position); head.getWorldQuaternion(_cam.quaternion); return _cam; }
 let modelReady = false, envReady = false;
-new RGBELoader().load('pano/v4/env.hdr', t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; scene.environmentIntensity = 0.3; t.dispose(); envReady = true; finishLoad(); },
+new RGBELoader().load('pano/v5/env.hdr', t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; scene.environmentIntensity = 0.3; t.dispose(); envReady = true; finishLoad(); },
   undefined, () => { envReady = 'fail'; finishLoad(); });
 function finishLoad() {
   if (!modelReady || !envReady || window.__ready) return;
