@@ -10,27 +10,25 @@ function loadScript(src) {
     const s = document.createElement('script'); s.src = src; s.dataset.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s);
   });
 }
+// connect to BOTH public brokers at once (whichever works carries the data; duplicates are dropped by sequence number)
 async function mqttConnect(base, onConnect) {
   await loadScript(base + 'mqtt.min.js');
-  let i = 0; const opts = { clientId: 'rl' + Math.random().toString(16).slice(2, 10), clean: true, keepalive: 20, reconnectPeriod: 4000, connectTimeout: 6000 };
-  let c = window.mqtt.connect(MQTT_URLS[0], opts);
-  // rotate to the next public broker if the first one doesn't answer
-  c.on('error', () => {}); c.on('close', () => { if (!c.connected && ++i < 6) { const url = MQTT_URLS[i % MQTT_URLS.length]; c.end(true); c = window.mqtt.connect(url, opts); wire(c); } });
-  const wire = cl => cl.on('connect', () => onConnect(cl));
-  wire(c);
-  return () => c;
+  return MQTT_URLS.map(url => {
+    const cl = window.mqtt.connect(url, { clientId: 'rl' + Math.random().toString(16).slice(2, 10), clean: true, keepalive: 20, reconnectPeriod: 5000, connectTimeout: 8000 });
+    cl.on('error', () => {}); cl.on('connect', () => onConnect(cl)); return cl;
+  });
 }
 export function makeCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
 
 export class LinkSender {
-  constructor(code, base, onStatus = () => {}) { this.code = code; this.base = base; this.onStatus = onStatus; this.conns = new Set(); this.mqttSeen = 0; this.cl = null; this.stopped = true; }
+  constructor(code, base, onStatus = () => {}) { this.code = code; this.base = base; this.onStatus = onStatus; this.conns = new Set(); this.mqttSeen = 0; this.cls = []; this.stopped = true; this.seq = 0; }
   async start() {
     this.stopped = false; this.onStatus('starting…');
     try { await loadScript(this.base + 'peerjs.min.js'); this._peer(); } catch (e) { this.onStatus('WebRTC library failed to load — using MQTT only'); }
     try {
-      await mqttConnect(this.base, cl => {
+      this.cls = await mqttConnect(this.base, cl => {
         if (this.stopped) return cl.end(true);
-        this.cl = cl; cl.subscribe(TOPIC(this.code) + '/hello');
+        cl.subscribe(TOPIC(this.code) + '/hello');
         cl.removeAllListeners('message'); cl.on('message', () => { this.mqttSeen = performance.now(); this._status(); });
         this._status();
       });
@@ -46,18 +44,19 @@ export class LinkSender {
   }
   get viewers() { return this.conns.size + (performance.now() - this.mqttSeen < 8000 ? 1 : 0); }
   _status() {
-    const n = this.viewers, rtc = this.peer && this.peer.open, mq = this.cl && this.cl.connected;
+    const n = this.viewers, rtc = this.peer && this.peer.open, mq = this.cls.some(c => c.connected);
     this.onStatus(n ? `TV connected (${this.conns.size ? 'WebRTC' : 'MQTT'})` : `waiting for TV… (${[rtc && 'WebRTC', mq && 'MQTT'].filter(Boolean).join(' + ') || 'connecting'})`);
   }
   send(str) {
+    str = str.slice(0, -1) + `,"s":${++this.seq}}`;
     for (const c of this.conns) { try { c.send(str); } catch (e) {} }
-    if (this.cl && this.cl.connected && performance.now() - this.mqttSeen < 8000) this.cl.publish(TOPIC(this.code) + '/state', str, { qos: 0 });
+    if (performance.now() - this.mqttSeen < 8000) for (const cl of this.cls) if (cl.connected) cl.publish(TOPIC(this.code) + '/state', str, { qos: 0 });
   }
-  stop() { this.stopped = true; try { this.peer && this.peer.destroy(); } catch (e) {} try { this.cl && this.cl.end(true); } catch (e) {} this.conns.clear(); this.cl = null; this.onStatus('off'); }
+  stop() { this.stopped = true; try { this.peer && this.peer.destroy(); } catch (e) {} for (const cl of this.cls) { try { cl.end(true); } catch (e) {} } this.conns.clear(); this.cls = []; this.onStatus('off'); }
 }
 
 export class LinkReceiver {
-  constructor(code, base, onMsg, onStatus = () => {}, transport = 'auto') { Object.assign(this, { code, base, onMsg, onStatus, transport }); this.last = 0; this.via = ''; }
+  constructor(code, base, onMsg, onStatus = () => {}, transport = 'auto') { Object.assign(this, { code, base, onMsg, onStatus, transport }); this.last = 0; this.via = ''; this.seq = 0; }
   async start() {
     if (this.transport !== 'mqtt') { try { await loadScript(this.base + 'peerjs.min.js'); this._peer(); } catch (e) {} }
     // fall back to MQTT if no WebRTC data within 8 s (or immediately when forced)
@@ -65,7 +64,12 @@ export class LinkReceiver {
     if (this.transport === 'mqtt') this._mqtt(); else { setTimeout(fb, 6000); setInterval(fb, 10000); }
     setInterval(() => this.onStatus(performance.now() - this.last < 2500 ? `connected · ${this.via}` : 'waiting for headset…'), 1000);
   }
-  _msg(str, via) { this.last = performance.now(); this.via = via; try { this.onMsg(JSON.parse(str)); } catch (e) {} }
+  _msg(str, via) {
+    let m; try { m = JSON.parse(str); } catch (e) { return; }
+    const now = performance.now();
+    if (m.s && m.s <= this.seq && now - this.last < 3000) return;   // duplicate / out-of-order copy from the other path
+    if (m.s) this.seq = m.s; this.last = now; this.via = via; this.onMsg(m);
+  }
   _peer() {
     const p = this.peer = new window.Peer({ debug: 0 });
     const connect = () => {
@@ -79,11 +83,11 @@ export class LinkReceiver {
   async _mqtt() {
     if (this.cl) return; this.cl = true;
     try {
-      await mqttConnect(this.base, cl => {
-        this.cl = cl; cl.subscribe(TOPIC(this.code) + '/state');
-        cl.removeAllListeners('message'); cl.on('message', (t, m) => { if (performance.now() - this.last > 300 || this.via === 'MQTT') this._msg(m.toString(), 'MQTT'); });
+      this.cl = await mqttConnect(this.base, cl => {
+        cl.subscribe(TOPIC(this.code) + '/state');
+        cl.removeAllListeners('message'); cl.on('message', (t, m) => this._msg(m.toString(), 'MQTT'));
         const hello = () => cl.connected && cl.publish(TOPIC(this.code) + '/hello', '1', { qos: 0 });
-        hello(); clearInterval(this._h); this._h = setInterval(hello, 3000);
+        hello(); clearInterval(cl._h); cl._h = setInterval(hello, 3000);
       });
     } catch (e) { this.cl = null; }
   }

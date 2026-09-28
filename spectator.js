@@ -1,6 +1,6 @@
 // Spectator page for the office TV / laptop: one wide, non-split, undistorted view that follows the headset.
 import * as THREE from 'three';
-import { LinkReceiver } from './link.js?v=6';
+import { LinkReceiver } from './link.js?v=7';
 const $ = s => document.querySelector(s);
 const params = new URLSearchParams(location.search);
 const PANO = (i, hq) => `pano/v5/${hq ? 'e6' : 'e4'}_${i}_L.jpg?v=5`;   // left-eye image = mono 360 (4K default; ?q=hq -> 6K for a laptop)

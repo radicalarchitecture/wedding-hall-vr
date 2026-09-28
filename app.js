@@ -3,7 +3,7 @@ import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 import { RGBELoader } from './vendor/addons/RGBELoader.js';
 import { buildScene, L, W, H, HL, HW } from './scene.js?v=5';
 import { CardboardRenderer, PHONES, MI_VR_PLAY } from './cardboard.js?v=5';
-import { LinkSender, makeCode } from './link.js?v=6';
+import { LinkSender, makeCode } from './link.js?v=7';
 
 let EYE = parseFloat(params0().get('eye')) || 1.56; // 5'6" (1.68 m) adult: standing eye level 1.56 m AFF
 function params0() { return new URLSearchParams(location.search); }
