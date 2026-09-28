@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 import { RGBELoader } from './vendor/addons/RGBELoader.js';
-import { buildScene, L, W, H, HL, HW } from './scene.js?v=b1';
-import { CardboardRenderer, PHONES, MI_VR_PLAY } from './cardboard.js?v=a1';
+import { buildScene, L, W, H, HL, HW } from './scene.js?v=4';
+import { CardboardRenderer, PHONES, MI_VR_PLAY } from './cardboard.js?v=4';
 
 let EYE = parseFloat(params0().get('eye')) || 1.56; // 5'6" (1.68 m) adult: standing eye level 1.56 m AFF
 function params0() { return new URLSearchParams(location.search); }
@@ -339,10 +339,10 @@ function prTex(url) {
   if (texCache.size > 3) { const [k, old] = texCache.entries().next().value; if (k !== url) { texCache.delete(k); old.then(t => { liveTex.delete(t); if (!prSets.some(s => s.userData.L.material.map === t || s.userData.M.material.map === t)) t.dispose(); }); } }
   return p;
 }
-const PR_VER = '?v=a1';
+const PR_VER = '?v=4';
 // panorama quality: 'light' = 4096x2048 per eye (OnePlus Nord / default), 'hq' = 6144x3072 per eye (S25 Ultra)
 let prQuality = params.get('q') || localStorage.getItem('whq') || (cardboard.phoneKey === 's25u' ? 'hq' : 'light');
-const PR_DIR = 'pano/v3/';
+const PR_DIR = 'pano/v4/';
 const prUrl = (v, eye) => `${PR_DIR}${prQuality === 'hq' ? 'e6' : 'e4'}_${VIEWS.indexOf(v)}_${eye}.jpg${PR_VER}`;
 async function prShow(v, instant = false) {
   prBusy = true; const stereo = vrOn; let tL, tR = null;
@@ -493,7 +493,7 @@ function loop(now) {
 const _cam = new THREE.Object3D();
 function camObj() { head.getWorldPosition(_cam.position); head.getWorldQuaternion(_cam.quaternion); return _cam; }
 let modelReady = false, envReady = false;
-new RGBELoader().load('pano/v3/env.hdr', t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; scene.environmentIntensity = 0.3; t.dispose(); envReady = true; finishLoad(); },
+new RGBELoader().load('pano/v4/env.hdr', t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; scene.environmentIntensity = 0.3; t.dispose(); envReady = true; finishLoad(); },
   undefined, () => { envReady = 'fail'; finishLoad(); });
 function finishLoad() {
   if (!modelReady || !envReady || window.__ready) return;

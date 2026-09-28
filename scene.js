@@ -17,7 +17,7 @@ export function buildScene(renderer, manager) {
   const T = {
     cream: tex('tex2/marble_cream.jpg'), dark: tex('tex2/marble_dark.jpg'),
     floor: tex('tex2/floor.jpg', true, false), sculpt: tex('tex2/sculpture.jpg', true, false),
-    door: tex('tex2/door_wood.jpg', true, false), outdoor: tex('tex2/outdoor4.jpg', true, false), banquet: tex('tex2/banquet4.jpg', true, false),
+    door: tex('tex2/door_wood.jpg', true, false), outdoor: tex('tex2/outdoor5.jpg', true, false), banquet: tex('tex2/banquet5.jpg', true, false),
   };
    T.banquet.wrapS = THREE.MirroredRepeatWrapping;
   const glowTex = makeGlowTexture(), washTex = makeWashTexture(), aoTex = makeAOTexture(), blobTex = makeBlobTexture();
