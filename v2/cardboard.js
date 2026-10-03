@@ -32,6 +32,7 @@ export class CardboardRenderer {
   constructor(renderer) {
     this.renderer = renderer; this.viewer = MI_VR_PLAY; this.phoneKey = detectPhone(); this.distortion = true; this.ipd = 0.063;
     this.scale = 1.0; // eye render-target scale
+    this.ss = 1.4;   // supersampling factor vs native pixel density at the lens centre
     this.eye = [new THREE.PerspectiveCamera(), new THREE.PerspectiveCamera()];
     const opts = { type: THREE.HalfFloatType, samples: 4, depthBuffer: true };
     this.rt = [new THREE.WebGLRenderTarget(16, 16, opts), new THREE.WebGLRenderTarget(16, 16, opts)];
@@ -60,7 +61,17 @@ export class CardboardRenderer {
     });
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat);
     this.postScene = new THREE.Scene(); this.postScene.add(this.quad); this.postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    this.info = {};
+    this.info = {}; this._right = new THREE.Vector3();
+    this.photoreal = false;
+  }
+  // photoreal: panorama sphere is already tone-mapped (Cycles/AgX) -> no MSAA, no 2nd tone map, no supersampling
+  setPhotoreal(on) {
+    if (this.photoreal === on && this.rt[0].samples === (on ? 0 : 4)) return;
+    this.photoreal = on; this.mat.toneMapped = !on; this.mat.needsUpdate = true;
+    const opts = on ? { type: THREE.UnsignedByteType, samples: 0, depthBuffer: true } : { type: THREE.HalfFloatType, samples: 4, depthBuffer: true };
+    this.rt.forEach(r => r.dispose()); this.rt = [new THREE.WebGLRenderTarget(16, 16, opts), new THREE.WebGLRenderTarget(16, 16, opts)];
+    if (this.rt[0].texture && on) this.rt.forEach(r => r.texture.colorSpace = THREE.SRGBColorSpace);
+    if (this._last) this.setSize(...this._last);
   }
   // mm per CSS px from physical screen length and the screen's CSS size
   metrics(cssW, cssH) {
@@ -84,17 +95,20 @@ export class CardboardRenderer {
     return this.info;
   }
   setSize(cssW, cssH, pr) {
-    const I = this.layout(cssW, cssH);
+    const I = this.layout(cssW, cssH); this._last = [cssW, cssH, pr];
     // texture resolution ~ matches centre pixel density of the eye viewport
     const eyeCssW = cssW / 2, eyeCssH = cssH;
     const tw = I.tanL[0] + I.tanL[1], th = I.tanL[2] + I.tanL[3];
     const pxPerTan = I.stl / I.mmPerCss * pr * this.scale;
-    const w = Math.min(2048, Math.round(tw * pxPerTan * 0.85)), h = Math.min(2048, Math.round(th * pxPerTan * 0.85));
+    // supersample the pre-distortion eye buffer (~1.4x native centre density) so the barrel warp doesn't soften/pixelate
+    const maxS = Math.min(4096, this.renderer.capabilities.maxTextureSize);
+    const ss = this.photoreal ? 1.0 : this.ss;
+    const w = Math.min(maxS, Math.round(tw * pxPerTan * ss)), h = Math.min(maxS, Math.round(th * pxPerTan * ss));
     this.rt.forEach(r => r.setSize(w, h)); this.rtSize = [w, h];
   }
   render(scene, head, cssW, cssH) {
     const r = this.renderer, I = this.info, near = 0.05, far = 200;
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(head.quaternion);
+    const right = this._right.set(1, 0, 0).applyQuaternion(head.quaternion);
     for (let e = 0; e < 2; e++) {
       const cam = this.eye[e], s = e === 0 ? -1 : 1;
       const [o, i, b, t] = I.tanL;

@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/addons/RoomEnvironment.js';
-import { buildScene, L, W, H, HL, HW } from './scene.js';
-import { CardboardRenderer, PHONES, MI_VR_PLAY } from './cardboard.js';
+import { RGBELoader } from '../vendor/addons/RGBELoader.js';
+import { buildScene, L, W, H, HL, HW } from './scene.js?v=2';
+import { CardboardRenderer, PHONES, MI_VR_PLAY } from './cardboard.js?v=2';
+import { LinkSender, makeCode } from './link.js?v=7';
 
-const EYE = 1.6;
+let EYE = parseFloat(params0().get('eye')) || 1.56; // 5'6" (1.68 m) adult: standing eye level 1.56 m AFF
+function params0() { return new URLSearchParams(location.search); }
 const $ = s => document.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -16,8 +19,8 @@ let DPR_CAP = isMobile ? 1.75 : 2;
 renderer.setPixelRatio(Math.min(devicePixelRatio, DPR_CAP));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.9;
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 0.7;
 $('#stage').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -31,7 +34,7 @@ const cardboard = new CardboardRenderer(renderer);
 const manager = new THREE.LoadingManager();
 manager.onProgress = (u, a, b) => { $('#lprog').style.width = (a / b * 100) + '%'; };
 const S = buildScene(renderer, manager);
-scene.add(S.group, S.extras, S.floor, S.decals, S.lights, S.mirror);
+scene.add(S.group, S.extras, S.floor, S.lights, S.mirror); // v3: fake AO/band/pool decals no longer added
 let reflections = params.get('refl') !== '0';
 S.mirror.visible = reflections;
 
@@ -52,7 +55,7 @@ function captureEnv() {
 // ------------------------------------------------------------------ viewpoints + hotspots
 const VIEWS = [
   { id: 'centre', name: 'Foyer centre', x: 0, z: 0.2, yaw: 1.15 },
-  { id: 'arrival', name: 'Arrival', x: 0, z: -2.1, yaw: Math.PI },
+  { id: 'arrival', name: 'Arrival', x: 0, z: -1.3, yaw: Math.PI },
   { id: 'cascade', name: 'Cascade & reception', x: 0, z: -0.2, yaw: Math.PI },
   { id: 'chand', name: 'Chandeliers', x: -5.6, z: 0.3, yaw: 1.2, pitch: 0.55 },
   { id: 'niche', name: 'Lotus niche', x: -9.4, z: 0, yaw: Math.PI / 2 },
@@ -63,7 +66,7 @@ const VIEWS = [
 const hotspots = [];
 const hitMeshes = [];
 {
-  const ringG = new THREE.RingGeometry(0.34, 0.46, 64).rotateX(-Math.PI / 2);
+  const ringG = new THREE.RingGeometry(0.36, 0.42, 64).rotateX(-Math.PI / 2);
   const discG = new THREE.CircleGeometry(0.34, 48).rotateX(-Math.PI / 2);
   const beamG = new THREE.CylinderGeometry(0.4, 0.4, 1.5, 32, 1, true);
   const beamMat = new THREE.ShaderMaterial({ uniforms: { c: { value: new THREE.Color(1, 0.8, 0.45) }, a: { value: 0.35 } }, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
@@ -71,10 +74,10 @@ const hitMeshes = [];
     fragmentShader: `uniform vec3 c; uniform float a; varying float vy; void main(){ gl_FragColor=vec4(c*a*pow(1.0-vy,2.0),1.0); }` });
   for (const v of VIEWS) {
     const g = new THREE.Group(); g.position.set(v.x, 0.015, v.z);
-    const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.78, 0.4).multiplyScalar(2.2), transparent: true, opacity: 0.95, depthWrite: false });
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xf4ead8, transparent: true, opacity: 0.8, depthWrite: false, toneMapped: false });
     const ring = new THREE.Mesh(ringG, ringMat);
-    const disc = new THREE.Mesh(discG, new THREE.MeshBasicMaterial({ color: 0xffe2a8, transparent: true, opacity: 0.12, depthWrite: false }));
-    const beam = new THREE.Mesh(beamG, beamMat.clone()); beam.position.y = 0.75;
+    const disc = new THREE.Mesh(discG, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.06, depthWrite: false, toneMapped: false }));
+    const beam = new THREE.Object3D(); beam.material = { uniforms: { a: { value: 0 } } }; // v3: fake light cones removed
     const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.6, 12), new THREE.MeshBasicMaterial({ visible: false })); hit.position.y = 0.8;
     const label = makeLabel(v.name); label.position.y = 1.75; label.visible = false;
     hit.userData.view = v; g.userData = { view: v, ring, disc, beam, label };
@@ -90,7 +93,7 @@ function makeLabel(text) {
 }
 function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
-// 3D gaze reticle (rendered in both eyes at 2 m) with dwell arc
+// 3D gaze reticle (rendered in both eyes at 2 m); ring highlights when over a hotspot (no dwell timer)
 const reticle = new THREE.Group();
 const retMat = new THREE.ShaderMaterial({ uniforms: { p: { value: 0 }, on: { value: 0 } }, transparent: true, depthTest: false, depthWrite: false, toneMapped: false,
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
@@ -123,6 +126,12 @@ let vrOn = false;
 const qGyro = new THREE.Quaternion();
 
 function goTo(v, instant = false) {
+  if (photoreal && !instant) {
+    if (v.id === '_') { let best = null, bd = 2.5; for (const w of VIEWS) { const d = Math.hypot(w.x - v.x, w.z - v.z); if (d < bd) { bd = d; best = w; } } if (!best) return; v = best; }
+    if (v === current && !prBusy) return;
+    current = v; document.querySelectorAll('#views button').forEach(b => b.classList.toggle('on', b.dataset.id === v.id));
+    prShow(v); return;
+  }
   current = v; document.querySelectorAll('#views button').forEach(b => b.classList.toggle('on', b.dataset.id === v.id));
   const from = { x: head.position.x, z: head.position.z, yaw, pitch };
   let dy = v.yaw - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
@@ -232,7 +241,14 @@ phoneSel.value = params.get('phone') || cardboard.phoneKey; cardboard.phoneKey =
 phoneSel.onchange = () => { cardboard.phoneKey = phoneSel.value; onResize(); showInfo(); };
 $('#setLens').checked = params.get('lens') !== '0'; cardboard.distortion = $('#setLens').checked;
 $('#setLens').onchange = e => { cardboard.distortion = e.target.checked; onResize(); showInfo(); };
-$('#setRefl').checked = reflections; $('#setRefl').onchange = e => { reflections = e.target.checked; S.mirror.visible = reflections; };
+$('#setRefl').checked = reflections; $('#setRefl').onchange = e => { reflections = e.target.checked; S.mirror.visible = reflections && !photoreal; };
+const FINISHES = { gold: [0xd4b276, 0.3], rose: [0xd9a38a, 0.3], champagne: [0xe0d2b8, 0.28], silver: [0xcfd1d4, 0.34] };
+function setFinish(k, quiet) { const f = FINISHES[k] || FINISHES.gold; S.M.frame.color.setHex(f[0]); S.M.frame.roughness = f[1]; $('#setFinish').value = k;
+  if (!quiet && photoreal && k !== 'gold') { setMode(false); toast('Frame finish preview shown in Real-time mode (photoreal panoramas are rendered in PVD gold)', 3800); } }
+$('#setEye').value = EYE.toFixed(2);
+$('#setEye').onchange = e => { const v = parseFloat(e.target.value); if (v > 1.0 && v < 2.0) { EYE = v; head.position.y = EYE; if (photoreal) toast('Eye height applies to Real-time mode; photoreal panoramas are rendered at 1.56 m', 3500); } };
+$('#setFinish').onchange = e => setFinish(e.target.value);
+if (params.get('finish')) setFinish(params.get('finish'), true);
 $('#btnSet').onclick = () => { $('#settings').classList.toggle('show'); showInfo(); };
 $('#setClose').onclick = () => $('#settings').classList.remove('show');
 function showInfo() {
@@ -257,8 +273,9 @@ async function enterVR(opts = {}) {
   if (!opts.noHistory) history.pushState({ vr: 1 }, '');
   onResize();
   if (!locked && isPortrait() && !opts.noRotatePrompt) $('#rotate').classList.add('show');
-  setTimeout(() => showVRToast('Look at a gold ring and press the button to walk'), 700);
+  setTimeout(() => showVRToast('Look at a ring and tap the headset button to move'), 700);
   vrFrames = 0; vrT0 = performance.now(); vrQualityStep = 0;
+  if (photoreal) prShow(current, true);
 }
 async function exitVR(fromPop = false) {
   if (!vrOn) return; vrOn = false; document.body.classList.remove('vr'); $('#rotate').classList.remove('show'); reticle.visible = false; vrToast.visible = false;
@@ -267,7 +284,8 @@ async function exitVR(fromPop = false) {
   try { if (document.fullscreenElement) await document.exitFullscreen(); } catch (e) {}
   try { await wakeLock?.release(); } catch (e) {} wakeLock = null;
   if (!fromPop && history.state?.vr) history.back();
-  cardboard.scale = 1; S.mirror.visible = reflections; onResize();
+  cardboard.scale = 1; S.mirror.visible = reflections && !photoreal; onResize();
+  if (photoreal) prShow(current, true);
 }
 $('#btnVR').onclick = () => enterVR();
 $('#rotCancel').onclick = e => { e.stopPropagation(); exitVR(); };
@@ -294,6 +312,86 @@ function vrSelect() {
   else { retMat.uniforms.on.value = 1; setTimeout(() => retMat.uniforms.on.value = 0, 150); }
 }
 
+// ------------------------------------------------------------------ PHOTOREAL 360 (Cycles path-traced stereo panoramas per viewpoint)
+// Each viewpoint: top-bottom stereo equirect (left eye top, 63 mm IPD, spherical stereo) rendered in Blender Cycles.
+// Left-eye sphere on layer 1 (mono camera + left eye), right-eye sphere on layer 2. Rings stay 3D at true positions,
+// occluded by an invisible depth-only copy of the model so they hide behind the counter/walls exactly like in the render.
+let photoreal = params.get('mode') !== 'rt';
+const PR_R = 40;
+const prGeo = (v0, v1) => { const g = new THREE.SphereGeometry(PR_R, 96, 64); g.scale(-1, 1, 1); g.rotateY(-Math.PI / 2);
+  const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, v0 + uv.getY(i) * (v1 - v0)); return g; };
+const prGeos = { L: prGeo(0, 1), R: prGeo(0, 1), M: prGeo(0, 1) };
+function prSet() {
+  const g = new THREE.Group(); g.renderOrder = -10;
+  const mk = (geo, layer) => { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 1, depthWrite: false, depthTest: false, toneMapped: false })); m.layers.set(layer); m.renderOrder = -10; m.frustumCulled = false; g.add(m); return m; };
+  g.userData = { L: mk(prGeos.L, 1), R: mk(prGeos.R, 2), M: mk(prGeos.M, 1) }; g.visible = false; scene.add(g); return g;
+}
+const prSets = [prSet(), prSet()]; let prFront = 0, prBusy = false, prFade = null;
+camera.layers.enable(1); cardboard.eye[0].layers.enable(1); cardboard.eye[1].layers.enable(2);
+const prOcc = S.group.clone(); { const dm = new THREE.MeshBasicMaterial({ colorWrite: false }); prOcc.traverse(o => { if (o.isMesh) o.material = dm; }); prOcc.remove(prOcc.children.find(o => o === S.chand) || S.chand); prOcc.children.filter(o => o.isGroup).forEach(o => prOcc.remove(o)); prOcc.visible = false; prOcc.renderOrder = -5; scene.add(prOcc); }
+const texLoader = new THREE.TextureLoader(), texCache = new Map(), liveTex = new Set();
+// 6K-per-eye equirects (6144x3072): no mipmaps (75 MB each on the GPU instead of 100 MB); the VR eye buffers are
+// supersampled to ~1:1 with the panorama so plain linear filtering is sharp and alias-free.
+function prTex(url) {
+  if (texCache.has(url)) return texCache.get(url);
+  const p = new Promise((res, rej) => texLoader.load(url, t => { t.colorSpace = THREE.SRGBColorSpace; t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter; renderer.initTexture(t); liveTex.add(t); res(t); }, undefined, rej));
+  p.catch(() => texCache.delete(url));
+  texCache.set(url, p);
+  if (texCache.size > 3) { const [k, old] = texCache.entries().next().value; if (k !== url) { texCache.delete(k); old.then(t => { liveTex.delete(t); if (!prSets.some(s => s.userData.L.material.map === t || s.userData.M.material.map === t)) t.dispose(); }); } }
+  return p;
+}
+const PR_VER = '?v=2';
+// panorama quality: 'light' = 4096x2048 per eye (OnePlus Nord / default), 'hq' = 6144x3072 per eye (S25 Ultra)
+let prQuality = params.get('q') || localStorage.getItem('whq') || (cardboard.phoneKey === 's25u' ? 'hq' : 'light');
+const PR_DIR = '../pano/v2/';
+const prUrl = (v, eye) => `${PR_DIR}${prQuality === 'hq' ? 'e6' : 'e4'}_${VIEWS.indexOf(v)}_${eye}.jpg${PR_VER}`;
+async function prShow(v, instant = false) {
+  prBusy = true; const stereo = vrOn; let tL, tR = null;
+  $('#prSpin')?.classList.add('show');
+  try { [tL, tR] = await Promise.all([prTex(prUrl(v, 'L')), stereo ? prTex(prUrl(v, 'R')) : Promise.resolve(null)]); }
+  catch (e) { prBusy = false; $('#prSpin')?.classList.remove('show'); texCache.delete(prUrl(v, 'L')); texCache.delete(prUrl(v, 'R'));
+    photoreal = false; applyMode(); goTo(v, true); toast('Photoreal view for this spot is still rendering — showing Real-time 3D', 3500); return; }
+  $('#prSpin')?.classList.remove('show');
+  if (current !== v && !instant) { prBusy = false; return; }
+  const back = prSets[1 - prFront], front = prSets[prFront], u = back.userData;
+  // mono (normal screen): left-eye image on the camera layer; VR: left/right spheres on eye layers
+  u.M.material.map = stereo ? null : tL; u.L.material.map = stereo ? tL : null; u.R.material.map = stereo ? tR : null;
+  u.M.visible = !stereo; u.L.visible = u.R.visible = stereo;
+  for (const m of [u.L, u.R, u.M]) { m.material.needsUpdate = true; m.material.opacity = instant ? 1 : 0; }
+  back.visible = true; back.renderOrder = -9; front.renderOrder = -10;
+  head.position.x = v.x; head.position.z = v.z; tween = null;
+  if (!(gyroOn || vrOn) && v.id !== '_') { yaw = v.yaw; pitch = v.pitch ?? 0.06; }
+  prFade = { t0: performance.now(), dur: instant ? 1 : 450, back, front };
+  prFront = 1 - prFront; prBusy = false;
+  // pre-fetch the nearest neighbour's left eye only (memory: 6K textures are big)
+  setTimeout(() => { let best = null, bd = 1e9; for (const w of VIEWS) { const d = Math.hypot(w.x - v.x, w.z - v.z); if (w !== v && d < bd) { bd = d; best = w; } } if (best) { fetch(prUrl(best, 'L')).catch(() => {}); if (vrOn) fetch(prUrl(best, 'R')).catch(() => {}); } }, 1500);
+}
+$('#setQ').value = prQuality;
+$('#setQ').onchange = e => { prQuality = e.target.value; localStorage.setItem('whq', prQuality); if (photoreal) prShow(current, true); };
+phoneSel.addEventListener('change', () => { if (!params.get('q') && !localStorage.getItem('whq')) { prQuality = phoneSel.value === 's25u' ? 'hq' : 'light'; $('#setQ').value = prQuality; } });
+function prFreeUnused(keepSet) {
+  const keep = new Set([keepSet.userData.L.material.map, keepSet.userData.R.material.map, keepSet.userData.M.material.map]);
+  for (const [url, p] of [...texCache]) p.then(t => { if (!keep.has(t)) { texCache.delete(url); liveTex.delete(t); if (!prSets.some(s => [s.userData.L, s.userData.R, s.userData.M].some(q => q.material.map === t && s === keepSet))) t.dispose(); } }).catch(() => {});
+}
+function prUpdate(now) {
+  for (const s of prSets) s.position.copy(head.position);
+  if (prFade) { const k = clamp((now - prFade.t0) / prFade.dur, 0, 1); const u = prFade.back.userData;
+    for (const m of [u.L, u.R, u.M]) m.material.opacity = k;
+    if (k >= 1) { prFreeUnused(prFade.back); const fu = prFade.front.userData; prFade.front.visible = false; for (const m of [fu.L, fu.R, fu.M]) { const t = m.material.map; m.material.map = null; if (t && !liveTex.has(t) && !prSets.some(s => s !== prFade.front && [s.userData.L, s.userData.R, s.userData.M].some(q => q.material.map === t))) t.dispose(); } prFade.back.renderOrder = -10; prFade = null; } }
+}
+function applyMode() {
+  cardboard.setPhotoreal(photoreal);
+  const rt = !photoreal;
+  for (const o of [S.group, S.extras, S.floor, S.lights]) o.visible = rt;
+  S.mirror.visible = rt && reflections && !(vrOn && vrQualityStep > 0);
+  prOcc.visible = photoreal; prSets.forEach(s => s.visible = photoreal && s.visible);
+  const b = $('#btnMode'); if (b) { b.classList.toggle('on', photoreal); b.querySelector('span').textContent = photoreal ? 'Photoreal' : 'Real-time'; }
+  document.body.classList.toggle('photoreal', photoreal);
+  if (photoreal && window.__ready) { let best = VIEWS[0], bd = 1e9; for (const w of VIEWS) { const d = Math.hypot(w.x - head.position.x, w.z - head.position.z); if (d < bd) { bd = d; best = w; } } current = best; prShow(best, true); }
+}
+function setMode(p) { photoreal = p; applyMode(); toast(p ? 'Photoreal 360 — path-traced panoramas at each viewpoint' : 'Real-time 3D — walk anywhere (tap the floor)'); }
+$('#btnMode')?.addEventListener('click', () => { stopTour(); setMode(!photoreal); });
+
 // ------------------------------------------------------------------ minimap
 const mm = $('#minimap'), mctx = mm.getContext('2d');
 function drawMinimap() {
@@ -306,7 +404,7 @@ function drawMinimap() {
   mctx.fillStyle = 'rgba(200,140,90,.9)'; for (const x of [-4.9, 4.9]) mctx.fillRect(ox + (x - 1.52) * s, oy + HW * s - 2, 3.05 * s, 3);
   for (const o of S.obstacles) { mctx.fillStyle = 'rgba(216,178,106,.35)'; mctx.fillRect(ox + o.x0 * s, oy + o.z0 * s, (o.x1 - o.x0) * s, (o.z1 - o.z0) * s); }
   for (const v of VIEWS) { mctx.fillStyle = v === current ? '#fff' : 'rgba(255,255,255,.4)'; mctx.beginPath(); mctx.arc(ox + v.x * s, oy + v.z * s, 2.5, 0, 7); mctx.fill(); }
-  const e = new THREE.Euler().setFromQuaternion(head.quaternion, 'YXZ');
+  const e = _eu2.setFromQuaternion(head.quaternion, 'YXZ');
   const cx = ox + head.position.x * s, cy = oy + head.position.z * s, hf = camera.fov * camera.aspect * Math.PI / 360, dir = -e.y - Math.PI / 2;
   mctx.fillStyle = 'rgba(243,214,154,.35)'; mctx.beginPath(); mctx.moveTo(cx, cy); mctx.arc(cx, cy, 34, dir - Math.min(hf, 1.2), dir + Math.min(hf, 1.2)); mctx.closePath(); mctx.fill();
   mctx.fillStyle = '#f3d69a'; mctx.beginPath(); mctx.arc(cx, cy, 4, 0, 7); mctx.fill();
@@ -319,7 +417,7 @@ mm.addEventListener('pointerup', e => {
 
 // ------------------------------------------------------------------ resize
 function onResize() {
-  const pr = Math.min(devicePixelRatio, vrOn ? Math.min(DPR_CAP, 1.5) : DPR_CAP);
+  const pr = vrOn ? devicePixelRatio : Math.min(devicePixelRatio, DPR_CAP); // VR: full native resolution (Nord 2400x1080)
   renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   if (vrOn) cardboard.setSize(innerWidth, innerHeight, pr);
@@ -330,6 +428,7 @@ addEventListener('resize', onResize); screen.orientation?.addEventListener?.('ch
 // ------------------------------------------------------------------ loop
 let last = performance.now(), vrFrames = 0, vrT0 = 0, vrQualityStep = 0;
 const yAxis = new THREE.Vector3(0, 1, 0), qYaw = new THREE.Quaternion(), qT = new THREE.Quaternion();
+const _eu = new THREE.Euler(), _eu2 = new THREE.Euler(), _v0 = new THREE.Vector2(0, 0);
 function updateHead(dt, now) {
   if (tween) {
     const t = clamp((now - tween.t0) / tween.dur, 0, 1), k = ease(t);
@@ -340,56 +439,70 @@ function updateHead(dt, now) {
   if (autoTour && !tween) { if (now > tourNext) { if (tourNext) { tourIdx = (tourIdx + 1) % VIEWS.length; goTo(VIEWS[tourIdx]); } tourNext = now + 7000; } else yaw += dt * 0.1; }
   else if (!gyroOn && !vrOn && !tween) { idleT += dt; if (idleT > 14) yaw += dt * 0.05; }
   camera.fov += (fov - camera.fov) * Math.min(1, dt * 12); camera.updateProjectionMatrix();
-  if (window.__mockGyro) { const m = window.__mockGyro; head.quaternion.setFromEuler(new THREE.Euler(m.pitch, m.yaw, m.roll || 0, 'YXZ')); return; }
+  if (window.__mockGyro) { const m = window.__mockGyro; head.quaternion.setFromEuler(_eu.set(m.pitch, m.yaw, m.roll || 0, 'YXZ')); return; }
   if (gyroOn && readGyro(qGyro)) {
-    if (yawOffset === null) { const ge = new THREE.Euler().setFromQuaternion(qGyro, 'YXZ'); yawOffset = yaw - ge.y; }
+    if (yawOffset === null) { const ge = _eu.setFromQuaternion(qGyro, 'YXZ'); yawOffset = yaw - ge.y; }
     qT.copy(qYaw.setFromAxisAngle(yAxis, yawOffset)).multiply(qGyro);
     // Generic Sensor data is already fused & smooth -> apply directly (lowest latency); light smoothing for the Euler fallback
-    if (sensorQ) head.quaternion.copy(qT); else head.quaternion.slerp(qT, 0.65);
-  } else head.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+    head.quaternion.copy(qT); // latest sample, applied directly every frame (no smoothing lag)
+  } else head.quaternion.setFromEuler(_eu.set(pitch, yaw, 0, 'YXZ'));
 }
 function updateHotspots(now, dt) {
   // gaze target (VR) = hotspot under the view centre
   let target = null;
-  if (vrOn) { ray.setFromCamera(new THREE.Vector2(0, 0), camera); const h = ray.intersectObjects(hitMeshes.filter(m => m.parent.visible))[0]; target = h ? h.object : null; }
+  if (vrOn) { ray.setFromCamera(_v0, camera); const hs = ray.intersectObjects(hitMeshes, false); let h = null; for (const x of hs) if (x.object.parent.visible) { h = x; break; } target = h ? h.object : null; }
   if (target !== gazeTarget) { gazeTarget = target; gazeT = 0; }
-  if (gazeTarget) gazeT += dt;
-  const p = clamp(gazeT / 2.0, 0, 1); retMat.uniforms.p.value = p; if (gazeTarget) retMat.uniforms.on.value = 1; else if (retMat.uniforms.on.value === 1 && !gazeTarget) retMat.uniforms.on.value = 0;
-  if (vrOn && p >= 1) { const v = gazeTarget.userData.view; goTo(v); showVRToast(v.name, 1400); gazeTarget = null; gazeT = 0; }
+  // v5: no dwell/auto-teleport -- moving only on an explicit tap (headset nib or screen); hover = subtle highlight
+  retMat.uniforms.p.value = 0; if (gazeTarget) retMat.uniforms.on.value = 1; else if (retMat.uniforms.on.value === 1 && !gazeTarget) retMat.uniforms.on.value = 0;
   for (const h of hotspots) {
     const d = Math.hypot(h.position.x - head.position.x, h.position.z - head.position.z);
     h.visible = d > 0.5;
     const hot = gazeTarget && gazeTarget.parent === h;
     const pulse = 1 + Math.sin(now * 0.004 + h.position.x) * 0.06;
-    h.userData.ring.scale.setScalar(hot ? 1.35 : pulse);
-    h.userData.ring.material.color.setRGB(hot ? 3 : 2.2, hot ? 3 : 1.7, hot ? 3 : 0.9);
-    h.userData.disc.material.opacity = hot ? 0.45 : 0.12;
+    h.userData.ring.scale.setScalar(hot ? 1.15 : pulse);
+    h.userData.ring.material.opacity = hot ? 1 : 0.75;
+    h.userData.disc.material.opacity = hot ? 0.28 : 0.06;
     h.userData.beam.material.uniforms.a.value = hot ? 0.9 : 0.32;
     h.userData.label.visible = vrOn ? hot : (d > 2.6 && d < 10);
   }
 }
+let _mmN = 0;
+// lightweight frame-time probe (window.__perf) for testing
+const _pf = { n: 0, t0: 0, sum: 0, max: 0, js: 0 }; window.__perf = _pf;
+function perfTick(now) { const js = performance.now() - _pf.cur; _pf.js += js; if (_pf.last) { const d = now - _pf.last; _pf.sum += d; _pf.max = Math.max(_pf.max, d); _pf.n++; } _pf.last = now; }
 function loop(now) {
+  _pf.cur = performance.now();
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  updateHead(dt, now); head.updateMatrixWorld(true); updateHotspots(now, dt);
+  updateHead(dt, now); if (photoreal) prUpdate(now); head.updateMatrixWorld(true); updateHotspots(now, dt);
   if (S.water) S.water.material.uniforms.time.value = now / 1000;
+  if (S.basin) S.basin.material.uniforms.time.value = now / 1000;
+  if (S.mist) { S.mist.material.opacity = 0.75 + 0.25 * Math.sin(now / 700); S.mist.scale.y = 1 + 0.08 * Math.sin(now / 900); }
   S.mirror.children[1]?.traverse?.(o => { if (o.material?.uniforms?.time) o.material.uniforms.time.value = now / 1000; });
   if (vrOn) {
     cardboard.render(scene, camera.parent === head ? camObj() : camera, innerWidth, innerHeight);
     // adaptive quality after 2 s: drop reflections, then eye resolution, if under ~45 fps
     vrFrames++; const el2 = now - vrT0;
     if (el2 > 2000) { const fps = vrFrames / (el2 / 1000); vrFrames = 0; vrT0 = now;
-      if (fps < 45 && vrQualityStep === 0) { S.mirror.visible = false; vrQualityStep = 1; }
-      else if (fps < 45 && vrQualityStep === 1) { cardboard.scale = 0.75; onResize(); vrQualityStep = 2; } }
+      if (fps < 30 && vrQualityStep === 0) { S.mirror.visible = false; vrQualityStep = 1; if (photoreal) vrQualityStep = 1; }
+      else if (fps < 30 && vrQualityStep === 1 && !photoreal) { cardboard.scale = 0.75; onResize(); vrQualityStep = 2; } }
   } else renderer.render(scene, camera);
-  drawMinimap();
+  if (!vrOn && (++_mmN & 1)) drawMinimap(); // minimap at 30 Hz, never in VR
+  perfTick(now);
   requestAnimationFrame(loop);
 }
 const _cam = new THREE.Object3D();
 function camObj() { head.getWorldPosition(_cam.position); head.getWorldQuaternion(_cam.quaternion); return _cam; }
-manager.onLoad = () => {
+let modelReady = false, envReady = false;
+new RGBELoader().load('../pano/v2/env.hdr', t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; scene.environmentIntensity = 0.3; t.dispose(); envReady = true; finishLoad(); },
+  undefined, () => { envReady = 'fail'; finishLoad(); });
+function finishLoad() {
+  if (!modelReady || !envReady || window.__ready) return;
+  if (envReady === 'fail') captureEnv();
   goTo(VIEWS[0], true);
-  requestAnimationFrame(() => { captureEnv(); captureEnv(); $('#loader').classList.add('done'); window.__ready = true; });
-};
+  const done = () => { $('#loader').classList.add('done'); window.__ready = true; };
+  if (photoreal) prShow(VIEWS[0], true).then(done, done); else done();
+}
+manager.onLoad = () => { modelReady = true; finishLoad(); };
 requestAnimationFrame(loop);
 
 // ------------------------------------------------------------------ 8K equirectangular export (run offline; also callable in browser)
@@ -426,7 +539,36 @@ async function exportPanorama(width = 8192, quality = 0.92) {
   return cnv.toDataURL('image/jpeg', quality);
 }
 
-window.app = { enterVR, exitVR, goTo, VIEWS, exportPanorama, cardboard, vrSelect,
+applyMode();
+// ------------------------------------------------------------------ TV spectator link (throttled 20 Hz, no extra rendering)
+let tvLink = null, tvTimer = 0, tvLastStr = '', tvLastT = 0;
+const tvCode = () => { let c = localStorage.getItem('whTVcode'); if (!c) { c = makeCode(); localStorage.setItem('whTVcode', c); } return c; };
+const tvSpecURL = () => new URL('spectator.html', location.href).href.split('?')[0];
+function tvShow() {
+  const code = tvCode(); $('#tvCode').textContent = code; $('#tvURL').textContent = tvSpecURL().replace(/^https?:\/\//, '');
+  const s = document.createElement('script'); s.src = '../vendor/qrcode.js'; s.onload = () => { try { const qr = window.qrcode(0, 'M'); qr.addData(tvSpecURL() + '?room=' + code); qr.make(); $('#tvQR').src = qr.createDataURL(4, 8); } catch (e) {} };
+  if (!window.qrcode) document.head.appendChild(s); else s.onload();
+}
+function tvTick() {
+  if (!tvLink || !tvLink.viewers) return;
+  const q = head.quaternion, r = x => Math.round(x * 1e4) / 1e4;
+  let vi = VIEWS.indexOf(current);
+  if (!photoreal || vi < 0) { let bd = 1e9; VIEWS.forEach((w, i) => { const d = Math.hypot(w.x - head.position.x, w.z - head.position.z); if (d < bd) { bd = d; vi = i; } }); }
+  const str = `{"q":[${r(q.x)},${r(q.y)},${r(q.z)},${r(q.w)}],"v":${vi},"m":${photoreal ? 1 : 0},"f":${Math.round(fov)},"vr":${vrOn ? 1 : 0}}`;
+  const now = performance.now(); if (str === tvLastStr && now - tvLastT < 1000) return;
+  tvLastStr = str; tvLastT = now; tvLink.send(str);
+}
+function tvEnable(on) {
+  localStorage.setItem('whTV', on ? '1' : '0'); $('#setTV').checked = on; $('#tvBox').hidden = !on;
+  if (on && !tvLink) { tvShow(); tvLink = new LinkSender(tvCode(), '../vendor/', s => $('#tvStatus').textContent = s); tvLink.start(); tvTimer = setInterval(tvTick, 50); }
+  if (!on && tvLink) { tvLink.stop(); tvLink = null; clearInterval(tvTimer); }
+}
+$('#setTV').onchange = e => tvEnable(e.target.checked);
+$('#tvNew').onclick = () => { localStorage.setItem('whTVcode', makeCode()); if (tvLink) { tvEnable(false); tvEnable(true); } else tvShow(); };
+if (localStorage.getItem('whTV') === '1' || params.get('tv') === '1') tvEnable(true);
+
+window.app = { setMode, setFinish, get photoreal() { return photoreal; }, enterVR, exitVR, goTo, VIEWS, exportPanorama, cardboard, vrSelect,
   look: (y, p, f) => { poke(); yaw = y; pitch = p; if (f) { fov = f; camera.fov = f; } idleT = -1e9; },
+  tvEnable, get tvCode() { return tvCode(); }, get tvViewers() { return tvLink ? tvLink.viewers : 0; },
   place: (x, z) => { head.position.x = x; head.position.z = z; tween = null; },
-  setReflections: v => { reflections = v; S.mirror.visible = v; }, camera, renderer, scene, S };
+  setReflections: v => { reflections = v; S.mirror.visible = v && !photoreal; }, camera, renderer, scene, S, prShow };
