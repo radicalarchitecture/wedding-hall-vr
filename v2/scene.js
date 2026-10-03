@@ -281,7 +281,7 @@ export function buildScene(renderer, manager) {
     }
     // water sheet — thin BOX with standard mat named 'water' (ShaderMaterial does not survive GLB→Cycles)
     const wMat = new THREE.MeshStandardMaterial({
-      color: 0xc8dde8, roughness: 0.08, metalness: 0.05, emissive: 0xffd9a0, emissiveIntensity: 0.85,
+      color: 0x9eb4c0, roughness: 0.12, metalness: 0.02, emissive: 0x1a2428, emissiveIntensity: 0.15,
       transparent: true, opacity: 0.72,
     });
     wMat.name = 'water';

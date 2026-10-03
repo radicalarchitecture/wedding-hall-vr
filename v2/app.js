@@ -340,7 +340,7 @@ function prTex(url) {
   if (texCache.size > 3) { const [k, old] = texCache.entries().next().value; if (k !== url) { texCache.delete(k); old.then(t => { liveTex.delete(t); if (!prSets.some(s => s.userData.L.material.map === t || s.userData.M.material.map === t)) t.dispose(); }); } }
   return p;
 }
-const PR_VER = '?v=2';
+const PR_VER = '?v=2c';
 // panorama quality: 'light' = 4096x2048 per eye (OnePlus Nord / default), 'hq' = 6144x3072 per eye (S25 Ultra)
 let prQuality = params.get('q') || localStorage.getItem('whq') || (cardboard.phoneKey === 's25u' ? 'hq' : 'light');
 const PR_DIR = '../pano/v2/';
