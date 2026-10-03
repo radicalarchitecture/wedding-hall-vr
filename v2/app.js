@@ -474,8 +474,8 @@ function loop(now) {
   _pf.cur = performance.now();
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   updateHead(dt, now); if (photoreal) prUpdate(now); head.updateMatrixWorld(true); updateHotspots(now, dt);
-  if (S.water) S.water.material.uniforms.time.value = now / 1000;
-  if (S.basin) S.basin.material.uniforms.time.value = now / 1000;
+  if (S.water?.material?.uniforms?.time) S.water.material.uniforms.time.value = now / 1000;
+  if (S.basin?.material?.uniforms?.time) S.basin.material.uniforms.time.value = now / 1000;
   if (S.mist) { S.mist.material.opacity = 0.75 + 0.25 * Math.sin(now / 700); S.mist.scale.y = 1 + 0.08 * Math.sin(now / 900); }
   S.mirror.children[1]?.traverse?.(o => { if (o.material?.uniforms?.time) o.material.uniforms.time.value = now / 1000; });
   if (vrOn) {
