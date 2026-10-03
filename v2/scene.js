@@ -1,7 +1,7 @@
 // Radical Architecture — Wedding Hall entrance foyer, procedural 3D model
 // Dimensions from the plan DXF (inches): foyer 1038" x 240" = 26.37 m x 6.10 m; height 35'-0" = 10.67 m (double height).
 import * as THREE from 'three';
-import { mergeGeometries } from './vendor/addons/BufferGeometryUtils.js';
+import { mergeGeometries } from '../vendor/addons/BufferGeometryUtils.js';
 
 export const L = 26.37, W = 6.10, H = 10.67, HL = L / 2, HW = W / 2;
 const TAU = Math.PI * 2;

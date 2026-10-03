@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/addons/RoomEnvironment.js';
 import { RGBELoader } from '../vendor/addons/RGBELoader.js';
-import { buildScene, L, W, H, HL, HW } from './scene.js?v=2';
+import { buildScene, L, W, H, HL, HW } from './scene.js?v=3';
 import { CardboardRenderer, PHONES, MI_VR_PLAY } from './cardboard.js?v=2';
 import { LinkSender, makeCode } from './link.js?v=7';
 
